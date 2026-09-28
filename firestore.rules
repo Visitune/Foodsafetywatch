@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Alerts are public for reading, but restricted for writing (server-only/admin)
+    match /alerts/{alertId} {
+      allow read: if true;
+      allow write: if false; // Only via backend/admin
+    }
+
+    // Suppliers are restricted to authenticated users
+    match /suppliers/{supplierId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only via backend/admin
+    }
+
+    // User profiles are private
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

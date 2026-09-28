@@ -1,0 +1,33 @@
+{
+  "collections": {
+    "alerts": {
+      "description": "Real-time food safety alerts and recalls.",
+      "fields": {
+        "title": { "type": "string", "description": "Alert title" },
+        "source": { "type": "string", "description": "Agency source (e.g., FDA, EFSA)" },
+        "date": { "type": "timestamp", "description": "Publication date" },
+        "severity": { "type": "string", "description": "Low, Medium, High, Critical" },
+        "category": { "type": "string", "description": "Pathogen, Chemical, Allergen, Physical" },
+        "description": { "type": "string", "description": "Detailed description" },
+        "url": { "type": "string", "description": "Source link" }
+      }
+    },
+    "suppliers": {
+      "description": "Supplier risk profiles and compliance status.",
+      "fields": {
+        "name": { "type": "string", "description": "Supplier name" },
+        "riskScore": { "type": "number", "description": "0-100 risk score" },
+        "status": { "type": "string", "description": "Compliant, At Risk, Non-Compliant" },
+        "lastAudit": { "type": "timestamp", "description": "Date of last audit" },
+        "location": { "type": "string", "description": "Country/Region" }
+      }
+    },
+    "users": {
+      "description": "User profiles and preferences.",
+      "fields": {
+        "email": { "type": "string", "description": "User email" },
+        "watchlist": { "type": "array", "description": "List of categories or regions to watch" }
+      }
+    }
+  }
+}

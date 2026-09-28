@@ -1,0 +1,8 @@
+{
+  "name": "FoodSafetyWatch",
+  "description": "Global food safety monitoring and compliance portal by VisiPilot.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
