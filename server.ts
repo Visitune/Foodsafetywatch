@@ -1,4 +1,5 @@
 import express from 'express';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -31,8 +32,45 @@ const ai = new GoogleGenAI({
 let cachedAlerts: any[] = [];
 let lastAlertsFetchTime = 0;
 
-// Lead storage in memory
-const leadSubmissions: any[] = [];
+// Lead storage (persisted in data/leads.json so it survives restarts)
+interface LeadSubmission {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  company: string;
+  message: string;
+  source: string;
+  profile: string;
+  date: string;
+}
+
+const leadsDir = path.join(__dirname, 'data');
+const leadsFile = path.join(leadsDir, 'leads.json');
+
+function loadLeads(): LeadSubmission[] {
+  try {
+    if (fs.existsSync(leadsFile)) {
+      const raw = fs.readFileSync(leadsFile, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed as LeadSubmission[];
+    }
+  } catch (e) {
+    console.error('Unable to load leads file:', e);
+  }
+  return [];
+}
+
+function persistLeads(leads: LeadSubmission[]): void {
+  try {
+    fs.mkdirSync(leadsDir, { recursive: true });
+    fs.writeFileSync(leadsFile, JSON.stringify(leads, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('Unable to persist leads:', e);
+  }
+}
+
+let leadSubmissions: LeadSubmission[] = loadLeads();
 
 // Gemini-powered real-time alert generator
 async function getFoodSafetyAlerts(forceRefresh = false) {
@@ -43,6 +81,8 @@ async function getFoodSafetyAlerts(forceRefresh = false) {
 
   try {
     const prompt = `Agis en tant qu'analyste réglementaire senior en sécurité des aliments (food safety) pour VisiPilot.
+IMPORTANT : ces alertes sont des EXEMPLES DE DÉMONSTRATION inspirés de faits réels et vérifiables.
+N'invente AUCUNE référence juridique (numéro de règlement, CELEX, article, NOR) : utilise uniquement des références réelles et reconnues (ex : Règlement (CE) 178/2002, Règlement (CE) 2073/2005, Règlement (UE) 2023/915, Règlement (UE) 2017/625, Règlement (UE) 2025/40, 21 CFR Part 1 Subpart S) ou des mentions génériques si tu hésites.
 Génère un tableau JSON de 8 alertes et veilles réglementaires récentes et réalistes en sécurité sanitaire des aliments (microbiologie, contaminants chimiques, PFAS, allergènes, étiquetage, rappels RASFF / FDA / RappelConso).
 Chaque objet doit comporter :
 - id (string ex: 'alert-01')
@@ -88,17 +128,17 @@ Renvoie UNIQUEMENT le tableau JSON sans texte avant ni après.`;
       id: 'alert-01',
       title: 'Mise à jour des critères Listeria monocytogenes pour les denrées prêtes à consommer (Règlement CE 2073/2005)',
       source: 'Journal Officiel de l\'Union Européenne (EUR-Lex)',
-      legal_ref: 'Règlement (CE) n° 2073/2005 & Décision SANTE 2026',
+      legal_ref: 'Règlement (CE) n° 2073/2005 modifié par le Règlement (UE) 2024/2895',
       pays: 'UE',
       date: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
       severity: 'critical',
       secteur: 'Viandes & Traiteur',
       hazard_category: 'Pathogène / Microbiologique',
-      summary: 'Renforcement des critères microbiologiques imposant l\'absence stricte dans 25g de Listeria monocytogenes durant toute la durée de vie du produit sauf preuve scientifique issue de tests de vieillissement selon la norme ISO 20976-1.',
+      summary: 'Le critère Listeria monocytogenes des denrées prêtes à consommer évolue vers l\'absence dans 25 g, avec validation par challenge-tests (référentiel ISO 20976-1). Le Règlement (UE) 2024/2895 modifie le Règlement (CE) 2073/2005 : échéance de conformité au 1er juillet 2026.',
       impact: 'Nécessité de réviser immédiatement les dossiers de validation de DLC de tous les produits tranchés ou conditionnés sous atmosphère protectrice.',
       recommendation: 'Réaliser un audit de validation des challenge-tests et renforcer les plans de prélèvements de surface sur les lignes de conditionnement.',
       visipilot_tool: 'VisiTact',
-      url: 'https://eur-lex.europa.eu'
+      url: 'https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32024R2895'
     },
     {
       id: 'alert-02',
@@ -120,13 +160,13 @@ Renvoie UNIQUEMENT le tableau JSON sans texte avant ni après.`;
       id: 'alert-03',
       title: 'FDA FSMA Rule 204 — Registres électroniques des événements de traçabilité critiques (KDE)',
       source: 'US Federal Register · Food and Drug Administration',
-      legal_ref: '21 CFR Part 118 (Food Safety Modernization Act)',
+      legal_ref: '21 CFR Part 1, Subpart S (Règle 204 FSMA — Kritical Data Elements)',
       pays: 'US',
       date: new Date(Date.now() - 1000 * 60 * 360).toISOString(),
       severity: 'critical',
       secteur: 'Produits Laitiers',
       hazard_category: 'Fraude & Traçabilité',
-      summary: 'Exigence formelle pour tout exploitant exportant des fromages à pâte molle, légumes frais ou produits de la mer vers les USA de produire un tableur de traçabilité électronique sous 24h en cas de requête FDA.',
+      summary: 'Tout exploitant de denrées à haut risque (légumes-feuilles, fromages à croûte naturelle, purées de fruits à coque, mollusques, poissons entiers) doit tenir un registre électronique des événements de traçabilité critiques (KDE) et le transmettre à la FDA sous 24 h sur demande.',
       impact: 'Tout manquement entraîne la rétention douanière sans examen physique (DWPE - Detention Without Physical Examination).',
       recommendation: 'Connecter les numéros de lots de fabrication au registre centralisé VISITrack pour générer l\'export standardisé FDA en un clic.',
       visipilot_tool: 'VISITrack',
@@ -142,7 +182,7 @@ Renvoie UNIQUEMENT le tableau JSON sans texte avant ni après.`;
       severity: 'high',
       secteur: 'Épicerie & Épices',
       hazard_category: 'Chimique & Contaminants',
-      summary: 'Retrait du marché de plusieurs lots d\'épices suite à un autocontrôle révélant une teneur en mycotoxines supérieure au seuil réglementaire de 15 µg/kg.',
+      summary: 'Retrait du marché de plusieurs lots d\'épices suite à un autocontrôle révélant une teneur en mycotoxines supérieure à la teneur maximale réglementaire applicable (Annexe I du Règlement (UE) 2023/915).',
       impact: 'Blocage des stocks des matières premières associées et mise en quarantaine des produits finis incorporant ce lot.',
       recommendation: 'Déclencher la procédure de non-conformité dans VISIcat et notifier immédiatement les clients ayant reçu les assemblages concernés.',
       visipilot_tool: 'VISIcat',
@@ -150,7 +190,7 @@ Renvoie UNIQUEMENT le tableau JSON sans texte avant ni après.`;
     },
     {
       id: 'alert-05',
-      title: 'Nouveau seuil d\'action pour l\'étiquetage préventif des traces d\'arachide et fruits à coque (Doses VITAL 3.0)',
+      title: 'Étiquetage préventif de traces d\'arachide et de fruits à coque — bases quantitatives de type VITAL',
       source: 'EFSA NDA Panel & DGAL Note de service',
       legal_ref: 'Règlement (UE) n° 1169/2011 (INCO) & Codex Alimentarius',
       pays: 'UE',
@@ -158,7 +198,7 @@ Renvoie UNIQUEMENT le tableau JSON sans texte avant ni après.`;
       severity: 'medium',
       secteur: 'Multi-secteurs',
       hazard_category: 'Allergènes & INCO',
-      summary: 'Consensus européen pour limiter l\'utilisation abusive de la mention « peut contenir des traces de... ». L\'étiquetage de précaution doit désormais s\'appuyer sur une analyse quantitative du risque selon le référentiel VITAL 3.0.',
+      summary: 'Tendance réglementaire et scientifique (EFSA / ANSES) à fonder l\'étiquetage préventif de traces d\'allergènes sur une analyse quantitative du risque plutôt que sur des mentions systématiques : le référentiel VITAL (doses de référence, développé par l\'ANSES et largement adopté par l\'industrie) en constitue la méthode de référence, sans valeur de texte contraignant.',
       impact: 'Audit des lignes polyvalentes et mise à jour des maquettes d\'étiquetage dans le module recette VisiPLM.',
       recommendation: 'Effectuer les calculs de dose ingérée de référence et valider l\'efficacité du nettoyage par tests bandelettes immuno-enzymatiques.',
       visipilot_tool: 'VisiPLM',
@@ -280,8 +320,10 @@ app.get('/api/regulatory/texts', (req, res) => {
     texts = texts.filter(t => t.domainId === domain);
   }
 
-  if (status && status !== 'ALL') {
-    texts = texts.filter(t => t.status === status);
+  const ALLOWED_STATUSES: string[] = ['NOUVEAU', 'MODIFIÉ', 'CONSOLIDÉ', 'EN VIGUEUR', 'ABROGÉ'];
+  const statusParam = typeof status === 'string' ? status : undefined;
+  if (statusParam && statusParam !== 'ALL' && ALLOWED_STATUSES.includes(statusParam)) {
+    texts = texts.filter(t => t.status === statusParam);
   }
 
   if (q && typeof q === 'string') {
@@ -350,6 +392,7 @@ app.post('/api/contact-lead', (req, res) => {
   };
 
   leadSubmissions.push(submission);
+  persistLeads(leadSubmissions);
   console.log('New lead registered:', submission);
 
   res.json({

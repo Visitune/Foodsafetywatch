@@ -997,7 +997,7 @@ export const PRICING_PLANS = [
     id: 'pro',
     name: 'Pro',
     badge: 'RECOMMANDÉ AGROALIMENTAIRE',
-    badgeColor: 'bg-[#F97316]/10 text-[#F97316] border-[#F97316]/30',
+    badgeColor: 'bg-[#EA580C]/10 text-[#EA580C] border-[#EA580C]/30',
     description: 'La solution complète pour les industriels, coopératives et laboratoires qui doivent maîtriser l\'ensemble de leurs obligations et anticiper les crises.',
     priceMonthly: 215,
     priceYearly: 0,
