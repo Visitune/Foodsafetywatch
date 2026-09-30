@@ -24,7 +24,7 @@ const OFFICIAL_REGULATORY_TEXTS = [
 async function fetchFDAEnforcement(): Promise<any[]> {
   try {
     const url = 'https://api.fda.gov/food/enforcement.json?limit=10&sort=report_date:desc';
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const res = await fetch(url, {  });
     if (!res.ok) return [];
     const data = await res.json();
     return (data.results || []).map((r: any, i: number) => ({
@@ -49,7 +49,7 @@ async function fetchFDAEnforcement(): Promise<any[]> {
 async function fetchRASFFNotifications(): Promise<any[]> {
   try {
     const url = 'https://webgate.ec.europa.eu/rasff-window/portal/api/notifications?page=1&pageSize=10&format=json';
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const res = await fetch(url, {  });
     if (!res.ok) return [];
     const data = await res.json();
     const items = data.notifications || data.items || data.results || [];
@@ -85,7 +85,7 @@ ORDER BY DESC(?date)
 LIMIT 10`;
     const url = `https://publications.europa.eu/webapi/rdf/sparql?query=${encodeURIComponent(query)}`;
     const res = await fetch(url, {
-      signal: AbortSignal.timeout(10000),
+      ,
       headers: { 'Accept': 'application/sparql-results+json' }
     });
     if (!res.ok) return [];
@@ -140,7 +140,7 @@ async function getLegifranceToken(): Promise<string | null> {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: `grant_type=client_credentials&client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}`,
-      signal: AbortSignal.timeout(8000)
+      
     });
     if (!res.ok) return null;
     const data = await res.json();
@@ -160,7 +160,7 @@ async function fetchLegifranceTexts(): Promise<any[]> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ query: 'sécurité des aliments', nature: 'REGLEMENT', pageSize: 10, page: 1 }),
-      signal: AbortSignal.timeout(10000)
+      
     });
     if (!res.ok) return [];
     const data = await res.json();
