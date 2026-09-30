@@ -37,6 +37,8 @@ import { ArchitectureModal } from './components/ArchitectureModal.js';
 import { TextDetailModal } from './components/TextDetailModal.js';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://foodsafetywatch.onrender.com';
+
+export default function App() {
   // Navigation tabs
   const [activeTab, setActiveTab] = useState<'accueil' | 'engine' | 'sources' | 'diagnostic' | 'veille' | 'tarifs' | 'portail'>('accueil');
   const [currentLang, setCurrentLang] = useState<'FR' | 'EN' | 'DE'>('FR');
