@@ -14,7 +14,7 @@ export function PortailTab({ ctx }: { ctx: AppCtx }) {
   const handleLogin = async () => {
     setLoginLoading(true);
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch('https://foodsafetywatch.onrender.com/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: loginEmail, password: loginPassword })
@@ -52,7 +52,7 @@ export function PortailTab({ ctx }: { ctx: AppCtx }) {
       return;
     }
     try {
-      const res = await fetch('/api/bulletin', {
+      const res = await fetch('https://foodsafetywatch.onrender.com/api/bulletin', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {

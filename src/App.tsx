@@ -36,7 +36,7 @@ import { SourceDetailModal } from './components/SourceDetailModal.js';
 import { ArchitectureModal } from './components/ArchitectureModal.js';
 import { TextDetailModal } from './components/TextDetailModal.js';
 
-export default function App() {
+const API_URL = import.meta.env.VITE_API_URL || 'https://foodsafetywatch.onrender.com';
   // Navigation tabs
   const [activeTab, setActiveTab] = useState<'accueil' | 'engine' | 'sources' | 'diagnostic' | 'veille' | 'tarifs' | 'portail'>('accueil');
   const [currentLang, setCurrentLang] = useState<'FR' | 'EN' | 'DE'>('FR');
@@ -121,7 +121,7 @@ export default function App() {
 
   const fetchRegulatoryTexts = async () => {
     try {
-      const res = await fetch('/api/regulatory/texts');
+      const res = await fetch(API_URL + '/api/regulatory/texts');
       if (res.ok) {
         const data = await res.json();
         if (data.texts && data.texts.length > 0) {
@@ -135,7 +135,7 @@ export default function App() {
 
   const fetchSources = async () => {
     try {
-      const res = await fetch('/api/sources');
+      const res = await fetch(API_URL + '/api/sources');
       if (res.ok) {
         const data = await res.json();
         if (data.sources && data.sources.length > 0) {
@@ -171,7 +171,7 @@ export default function App() {
     }
     setCallbackSubmitting(true);
     try {
-      const res = await fetch('/api/contact-lead', {
+      const res = await fetch(API_URL + '/api/contact-lead', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(callbackForm)
@@ -199,7 +199,7 @@ export default function App() {
     setAiLoading(true);
     setAiAnswer(null);
     try {
-      const res = await fetch('/api/ask-regulatory', {
+      const res = await fetch(API_URL + '/api/ask-regulatory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
