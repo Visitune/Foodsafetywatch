@@ -60,30 +60,21 @@ async function fetchRASFFNotifications(): Promise<any[]> {
 
 async function fetchEURLEXTexts(): Promise<any[]> {
   try {
-    const query = `PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
-SELECT ?work ?celex ?title ?date WHERE {
-  ?work cdm:resource_legal_type "REG" .
-  ?work cdm:work_date_document ?date .
-  ?work cdm:work_id_celex ?celex .
-  FILTER (?date > "2024-01-01"^^xsd:date)
-}
-ORDER BY DESC(?date)
-LIMIT 10`;
-    const url = `https://publications.europa.eu/webapi/rdf/sparql?query=${encodeURIComponent(query)}`;
+    const url = 'https://eur-lex.europa.eu/eli-register/api/search?searchQuery=s%C3%A9curit%C3%A9+aliments&pageSize=10&page=1';
     const res = await fetch(url, {
-      signal: AbortSignal.timeout(8000),
-      headers: { 'Accept': 'application/sparql-results+json' }
+      signal: AbortSignal.timeout(10000),
+      headers: { 'Accept': 'application/json' }
     });
     if (!res.ok) return [];
     const data = await res.json();
-    const bindings = data.results?.bindings || [];
-    return bindings.map((b: any, i: number) => ({
-      id: `eurlex-${i}`,
-      title: b.title?.value || b.celex?.value || 'Texte EUR-Lex',
+    const results = data.results || data.items || [];
+    return results.map((r: any, i: number) => ({
+      id: `eurlex-${r.id || i}`,
+      title: r.title || r.intitule || 'Texte EUR-Lex',
       source: 'EUR-Lex · Cellar',
-      legal_ref: b.celex?.value || '',
+      legal_ref: r.id || r.celex || '',
       pays: 'UE',
-      date: b.date?.value || new Date().toISOString().split('T')[0],
+      date: r.datePublication || r.date || new Date().toISOString().split('T')[0],
       status: 'EN VIGUEUR',
       statusBadgeColor: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
       jurisdiction: 'UE',
@@ -91,23 +82,99 @@ LIMIT 10`;
       domainId: 'general',
       domainName: 'Général',
       subDomain: 'Général',
-      celexOrNor: b.celex?.value || '',
-      legalReference: b.celex?.value || '',
-      datePublication: b.date?.value || '',
-      dateEntreeVigueur: b.date?.value || '',
-      dateApplication: b.date?.value || '',
+      celexOrNor: r.id || r.celex || '',
+      legalReference: r.id || r.celex || '',
+      datePublication: r.datePublication || r.date || '',
+      dateEntreeVigueur: r.dateVigueur || r.date || '',
+      dateApplication: r.dateVigueur || r.date || '',
       isApplied: true,
-      articlesImpactSummary: 'Texte réglementaire EUR-Lex',
+      articlesImpactSummary: r.title || r.intitule || 'Texte réglementaire EUR-Lex',
       modifiedArticles: [],
       affectedProducts: [],
       previousRequirements: '',
       newRequirements: '',
       visipilotSoftwareModule: 'VisiPLM',
       visipilotActionPlan: '',
-      sourceUrl: `https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:${b.celex?.value || ''}`,
+      sourceUrl: `https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:${r.id || r.celex || ''}`,
       consolidatedUrl: '',
       officialSourceBadge: 'EUR-Lex',
-      url: `https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:${b.celex?.value || ''}`
+      url: `https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:${r.id || r.celex || ''}`
+    }));
+  } catch { return []; }
+}
+
+// ─── Légifrance / PISTE Connector ───
+
+let legifranceToken: { value: string; expiresAt: number } | null = null;
+
+async function getLegifranceToken(): Promise<string | null> {
+  if (legifranceToken && Date.now() < legifranceToken.expiresAt) {
+    return legifranceToken.value;
+  }
+  try {
+    const clientId = process.env.LEGIFRANCE_CLIENT_ID || '';
+    const clientSecret = process.env.LEGIFRANCE_CLIENT_SECRET || '';
+    if (!clientId || !clientSecret) return null;
+    const res = await fetch('https://sandbox-oauth.piste.gouv.fr/api/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `grant_type=client_credentials&client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}`,
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.access_token) {
+      legifranceToken = { value: data.access_token, expiresAt: Date.now() + (data.expires_in || 3600) * 1000 - 60000 };
+      return legifranceToken.value;
+    }
+    return null;
+  } catch { return null; }
+}
+
+async function fetchLegifranceTexts(): Promise<any[]> {
+  try {
+    const token = await getLegifranceToken();
+    if (!token) return [];
+    const res = await fetch('https://sandbox-api.piste.gouv.fr/dila/legifrance/lf-engine-app/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ query: 'sécurité des aliments', nature: 'REGLEMENT', pageSize: 10, page: 1 }),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const results = data.results || data.items || [];
+    return results.map((r: any, i: number) => ({
+      id: `legifrance-${r.id || i}`,
+      title: r.title || r.intitule || 'Texte Légifrance',
+      source: 'Légifrance · PISTE',
+      legal_ref: r.id || r.cid || '',
+      pays: 'FR',
+      date: r.datePublication || r.date || new Date().toISOString().split('T')[0],
+      status: 'EN VIGUEUR',
+      statusBadgeColor: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+      jurisdiction: 'FR',
+      jurisdictionLabel: 'France',
+      domainId: 'general',
+      domainName: 'Général',
+      subDomain: 'Général',
+      celexOrNor: r.id || r.cid || '',
+      legalReference: r.id || r.cid || '',
+      datePublication: r.datePublication || r.date || '',
+      dateEntreeVigueur: r.dateVigueur || r.date || '',
+      dateApplication: r.dateVigueur || r.date || '',
+      isApplied: true,
+      articlesImpactSummary: r.title || r.intitule || 'Texte réglementaire français',
+      modifiedArticles: [],
+      affectedProducts: [],
+      previousRequirements: '',
+      newRequirements: '',
+      visipilotSoftwareModule: 'VisiPLM',
+      visipilotActionPlan: '',
+      sourceUrl: `https://www.legifrance.gouv.fr/loda/id/${r.id || r.cid || ''}`,
+      consolidatedUrl: '',
+      officialSourceBadge: 'Légifrance',
+      url: `https://www.legifrance.gouv.fr/loda/id/${r.id || r.cid || ''}`
     }));
   } catch { return []; }
 }
@@ -148,7 +215,7 @@ app.get('/api/diagnostic-profiles', (req, res) => {
 app.get('/api/regulatory/texts', async (req, res) => {
   const { jurisdiction, domain, status, q } = req.query;
   const [realTexts, staticTexts] = await Promise.all([
-    fetchEURLEXTexts(),
+    Promise.all([fetchEURLEXTexts(), fetchLegifranceTexts()]).then(([eurlex, legifrance]) => [...eurlex, ...legifrance]),
     Promise.resolve([...OFFICIAL_REGULATORY_TEXTS])
   ]);
   let texts = [...realTexts, ...staticTexts];
