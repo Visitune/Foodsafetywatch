@@ -85,7 +85,6 @@ ORDER BY DESC(?date)
 LIMIT 10`;
     const url = `https://publications.europa.eu/webapi/rdf/sparql?query=${encodeURIComponent(query)}`;
     const res = await fetch(url, {
-      ,
       headers: { 'Accept': 'application/sparql-results+json' }
     });
     if (!res.ok) return [];
