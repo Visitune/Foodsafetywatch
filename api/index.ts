@@ -1,6 +1,6 @@
 import express from 'express';
 import { REGULATORY_SOURCES, DIAGNOSTIC_PROFILES, PRICING_PLANS } from '../src/data/sourcesData.js';
-import { REGULATORY_DOMAINS, OFFICIAL_REGULATORY_TEXTS, INGESTION_PIPELINES } from '../src/data/regulatoryEngineData.js';
+import { REGULATORY_DOMAINS, OFFICIAL_REGULATORY_TEXTS, OFFICIAL_REGULATORY_TEXTS_2026_2027, INGESTION_PIPELINES } from '../src/data/regulatoryEngineData.js';
 
 const app = express();
 app.use(express.json());
@@ -59,48 +59,58 @@ async function fetchRASFFNotifications(): Promise<any[]> {
 }
 
 async function fetchEURLEXTexts(): Promise<any[]> {
-  try {
-    const url = 'https://eur-lex.europa.eu/eli-register/api/search?searchQuery=s%C3%A9curit%C3%A9+aliments&pageSize=10&page=1';
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(10000),
-      headers: { 'Accept': 'application/json' }
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    const results = data.results || data.items || [];
-    return results.map((r: any, i: number) => ({
-      id: `eurlex-${r.id || i}`,
-      title: r.title || r.intitule || 'Texte EUR-Lex',
-      source: 'EUR-Lex · Cellar',
-      legal_ref: r.id || r.celex || '',
-      pays: 'UE',
-      date: r.datePublication || r.date || new Date().toISOString().split('T')[0],
-      status: 'EN VIGUEUR',
-      statusBadgeColor: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-      jurisdiction: 'UE',
-      jurisdictionLabel: 'Union Européenne',
-      domainId: 'general',
-      domainName: 'Général',
-      subDomain: 'Général',
-      celexOrNor: r.id || r.celex || '',
-      legalReference: r.id || r.celex || '',
-      datePublication: r.datePublication || r.date || '',
-      dateEntreeVigueur: r.dateVigueur || r.date || '',
-      dateApplication: r.dateVigueur || r.date || '',
-      isApplied: true,
-      articlesImpactSummary: r.title || r.intitule || 'Texte réglementaire EUR-Lex',
-      modifiedArticles: [],
-      affectedProducts: [],
-      previousRequirements: '',
-      newRequirements: '',
-      visipilotSoftwareModule: 'VisiPLM',
-      visipilotActionPlan: '',
-      sourceUrl: `https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:${r.id || r.celex || ''}`,
-      consolidatedUrl: '',
-      officialSourceBadge: 'EUR-Lex',
-      url: `https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:${r.id || r.celex || ''}`
-    }));
-  } catch { return []; }
+  const targetUrl = 'https://eur-lex.europa.eu/eli-register/api/search?searchQuery=s%C3%A9curit%C3%A9+aliments&pageSize=10&page=1';
+  const proxies = [
+    (u: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+    (u: string) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+    (u: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`
+  ];
+
+  for (const wrap of proxies) {
+    try {
+      const res = await fetch(wrap(targetUrl), { signal: AbortSignal.timeout(10000) });
+      if (!res.ok) continue;
+      const proxyData = await res.json();
+      const raw = proxyData.contents || proxyData;
+      const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const results = data.results || data.items || [];
+      if (results.length > 0) {
+        return results.map((r: any, i: number) => ({
+          id: `eurlex-${r.id || i}`,
+          title: r.title || r.intitule || 'Texte EUR-Lex',
+          source: 'EUR-Lex · Cellar',
+          legal_ref: r.id || r.celex || '',
+          pays: 'UE',
+          date: r.datePublication || r.date || new Date().toISOString().split('T')[0],
+          status: 'EN VIGUEUR',
+          statusBadgeColor: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+          jurisdiction: 'UE',
+          jurisdictionLabel: 'Union Européenne',
+          domainId: 'general',
+          domainName: 'Général',
+          subDomain: 'Général',
+          celexOrNor: r.id || r.celex || '',
+          legalReference: r.id || r.celex || '',
+          datePublication: r.datePublication || r.date || '',
+          dateEntreeVigueur: r.dateVigueur || r.date || '',
+          dateApplication: r.dateVigueur || r.date || '',
+          isApplied: true,
+          articlesImpactSummary: r.title || r.intitule || 'Texte réglementaire EUR-Lex',
+          modifiedArticles: [],
+          affectedProducts: [],
+          previousRequirements: '',
+          newRequirements: '',
+          visipilotSoftwareModule: 'VisiPLM',
+          visipilotActionPlan: '',
+          sourceUrl: `https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:${r.id || r.celex || ''}`,
+          consolidatedUrl: '',
+          officialSourceBadge: 'EUR-Lex',
+          url: `https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:${r.id || r.celex || ''}`
+        }));
+      }
+    } catch { continue; }
+  }
+  return [];
 }
 
 // ─── Légifrance / PISTE Connector ───
@@ -216,7 +226,7 @@ app.get('/api/regulatory/texts', async (req, res) => {
   const { jurisdiction, domain, status, q } = req.query;
   const [realTexts, staticTexts] = await Promise.all([
     Promise.all([fetchEURLEXTexts(), fetchLegifranceTexts()]).then(([eurlex, legifrance]) => [...eurlex, ...legifrance]),
-    Promise.resolve([...OFFICIAL_REGULATORY_TEXTS])
+    Promise.resolve([...OFFICIAL_REGULATORY_TEXTS, ...OFFICIAL_REGULATORY_TEXTS_2026_2027])
   ]);
   let texts = [...realTexts, ...staticTexts];
   if (jurisdiction && jurisdiction !== 'ALL') texts = texts.filter((t: any) => t.jurisdiction === jurisdiction);
