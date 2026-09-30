@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { REGULATORY_SOURCES, DIAGNOSTIC_PROFILES, PRICING_PLANS } from './src/data/sourcesData.js';
-import { REGULATORY_DOMAINS, OFFICIAL_REGULATORY_TEXTS, INGESTION_PIPELINES } from './src/data/regulatoryEngineData.js';
+import { REGULATORY_DOMAINS, OFFICIAL_REGULATORY_TEXTS, OFFICIAL_REGULATORY_TEXTS_2026_2027, INGESTION_PIPELINES } from './src/data/regulatoryEngineData.js';
 
 dotenv.config();
 
@@ -525,7 +525,7 @@ app.get('/api/regulatory/texts', async (req, res) => {
 
   const [realTexts, staticTexts] = await Promise.all([
     Promise.all([fetchEURLEXTexts(), fetchLegifranceTexts()]).then(([eurlex, legifrance]) => [...eurlex, ...legifrance]),
-    Promise.resolve([...OFFICIAL_REGULATORY_TEXTS])
+    Promise.resolve([...OFFICIAL_REGULATORY_TEXTS, ...OFFICIAL_REGULATORY_TEXTS_2026_2027])
   ]);
 
   let texts = [...realTexts, ...staticTexts];
