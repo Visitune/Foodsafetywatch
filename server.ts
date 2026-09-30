@@ -853,6 +853,8 @@ async function startServer() {
 
 export { app };
 
-if (process.env.NODE_ENV !== 'production' || process.env.VERCEL) {
+import { fileURLToPath as _f } from 'url';
+const isMain = process.argv[1] && _f(import.meta.url) === path.resolve(process.argv[1]);
+if (isMain) {
   startServer();
 }
