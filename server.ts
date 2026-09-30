@@ -532,7 +532,7 @@ app.get('/api/regulatory/texts', async (req, res) => {
 
   const [realTexts, staticTexts] = await Promise.all([
     Promise.all([fetchEURLEXTexts(), fetchLegifranceTexts()]).then(([eurlex, legifrance]) => [...eurlex, ...legifrance]),
-    Promise.resolve([...OFFICIAL_REGULATORY_TEXTS, ...OFFICIAL_REGULATORY_TEXTS_2026_2027])
+    Promise.resolve([...OFFICIAL_REGULATORY_TEXTS, ...OFFICIAL_REGULATORY_TEXTS_2026_2027].map((t: any) => ({ ...t, source: t.officialSource || t.officialSourceBadge || 'EUR-Lex / Cellar' })))
   ]);
 
   let texts = [...realTexts, ...staticTexts];
