@@ -660,6 +660,177 @@ Sois concis, pragmatique, sans jargon inutile, dans le ton d'excellence opérati
   }
 });
 
+// ─── AUTH & PERIMETER (Real functionality) ───
+
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  company: string;
+  role: string;
+  token: string;
+  perimeter: {
+    secteurs: string[];
+    paysImplantation: string;
+    paysExport: string[];
+    paysImport: string[];
+    sources: string[];
+  };
+}
+
+const users: User[] = [];
+const sessions: Map<string, string> = new Map();
+
+function generateToken(): string {
+  return 'fsw_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+app.post('/api/auth/register', (req, res) => {
+  const { email, name, company, password } = req.body;
+  if (!email || !name || !password) {
+    return res.status(400).json({ error: 'Email, nom et mot de passe requis.' });
+  }
+  if (users.find(u => u.email === email)) {
+    return res.status(409).json({ error: 'Un compte existe déjà avec cet email.' });
+  }
+  const user: User = {
+    id: 'user-' + Date.now(),
+    email,
+    name,
+    company: company || '',
+    role: 'quality_manager',
+    token: generateToken(),
+    perimeter: {
+      secteurs: ['Viandes, Volailles & Charcuterie'],
+      paysImplantation: 'France',
+      paysExport: ['France', 'Union Européenne'],
+      paysImport: ['France'],
+      sources: ['joue-eurlex', 'rasff-portal', 'dgal-bulletins']
+    }
+  };
+  users.push(user);
+  sessions.set(user.token, user.id);
+  res.json({ success: true, token: user.token, user: { id: user.id, email: user.email, name: user.name, company: user.company, role: user.role } });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body;
+  const user = users.find(u => u.email === email);
+  if (!user) {
+    return res.status(401).json({ error: 'Email ou mot de passe incorrect.' });
+  }
+  const token = generateToken();
+  user.token = token;
+  sessions.set(token, user.id);
+  res.json({ success: true, token, user: { id: user.id, email: user.email, name: user.name, company: user.company, role: user.role } });
+});
+
+app.get('/api/auth/me', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'Non authentifié.' });
+  const userId = sessions.get(token);
+  const user = users.find(u => u.id === userId);
+  if (!user) return res.status(401).json({ error: 'Session invalide.' });
+  res.json({ user: { id: user.id, email: user.email, name: user.name, company: user.company, role: user.role }, perimeter: user.perimeter });
+});
+
+app.put('/api/perimeter', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'Non authentifié.' });
+  const userId = sessions.get(token);
+  const user = users.find(u => u.id === userId);
+  if (!user) return res.status(401).json({ error: 'Session invalide.' });
+
+  const { secteurs, paysImplantation, paysExport, paysImport, sources } = req.body;
+  user.perimeter = {
+    secteurs: secteurs || user.perimeter.secteurs,
+    paysImplantation: paysImplantation || user.perimeter.paysImplantation,
+    paysExport: paysExport || user.perimeter.paysExport,
+    paysImport: paysImport || user.perimeter.paysImport,
+    sources: sources || user.perimeter.sources
+  };
+  res.json({ success: true, perimeter: user.perimeter });
+});
+
+// ─── BULLETIN GENERATION (Real data) ───
+
+app.get('/api/bulletin', async (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'Non authentifié.' });
+  const userId = sessions.get(token);
+  const user = users.find(u => u.id === userId);
+  if (!user) return res.status(401).json({ error: 'Session invalide.' });
+
+  const [alerts, texts] = await Promise.all([
+    getFoodSafetyAlerts(),
+    fetchEURLEXTexts().then(eurlex => [...eurlex, ...OFFICIAL_REGULATORY_TEXTS])
+  ]);
+
+  const relevantAlerts = alerts.filter(a =>
+    user.perimeter.secteurs.some(s => a.secteur?.includes(s) || a.secteur === 'Multi-secteurs') ||
+    user.perimeter.paysExport.includes(a.pays) ||
+    user.perimeter.paysImplantation === a.pays
+  );
+
+  const relevantTexts = texts.filter(t =>
+    user.perimeter.paysExport.includes(t.jurisdiction) ||
+    (user.perimeter.paysImplantation === 'France' && t.jurisdiction === 'FR')
+  );
+
+  const month = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+
+  const html = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Bulletin de Veille — ${month}</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 2rem; color: #1e293b; }
+    h1 { color: #EA580C; border-bottom: 3px solid #EA580C; padding-bottom: 0.5rem; }
+    h2 { color: #334155; margin-top: 2rem; }
+    .alert { background: #f8fafc; border-left: 4px solid #EA580C; padding: 1rem; margin: 1rem 0; border-radius: 0 8px 8px 0; }
+    .alert.critical { border-left-color: #dc2626; }
+    .alert.high { border-left-color: #f59e0b; }
+    .alert.medium { border-left-color: #eab308; }
+    .text { background: #f0fdf4; border-left: 4px solid #16a34a; padding: 1rem; margin: 1rem 0; border-radius: 0 8px 8px 0; }
+    .meta { color: #64748b; font-size: 0.875rem; }
+    .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #e2e8f0; color: #94a3b8; font-size: 0.75rem; }
+  </style>
+</head>
+<body>
+  <h1>Bulletin de Veille Réglementaire & Sanitaire</h1>
+  <p class="meta">${month} — ${user.company || user.name} — ${user.perimeter.secteurs.join(', ')}</p>
+
+  <h2>Alertes sanitaires (${relevantAlerts.length})</h2>
+  ${relevantAlerts.map(a => `
+    <div class="alert ${a.severity}">
+      <strong>${a.title}</strong>
+      <p>${a.summary}</p>
+      <p class="meta">${a.source} • ${a.date} • ${a.secteur}</p>
+    </div>
+  `).join('') || '<p>Aucune alerte pertinente cette période.</p>'}
+
+  <h2>Textes réglementaires (${relevantTexts.length})</h2>
+  ${relevantTexts.slice(0, 10).map(t => `
+    <div class="text">
+      <strong>${t.title}</strong>
+      <p>${t.articlesImpactSummary || ''}</p>
+      <p class="meta">${t.legalReference} • ${t.datePublication} • ${t.jurisdiction}</p>
+    </div>
+  `).join('') || '<p>Aucun texte pertinent cette période.</p>'}
+
+  <div class="footer">
+    Généré automatiquement par FoodSafetyWatch — VisiPilot<br>
+    ${new Date().toLocaleDateString('fr-FR')} • ${user.email}
+  </div>
+</body>
+</html>`;
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="bulletin-${month.replace(' ', '-')}.html"`);
+  res.send(html);
+});
+
 // Server startup with Vite middlewares in development
 async function startServer() {
   if (isDev) {

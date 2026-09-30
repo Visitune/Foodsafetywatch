@@ -1,8 +1,123 @@
 import { AlertTriangle, Calendar, CheckCircle2, Download, FileText, LayoutGrid, SlidersHorizontal } from 'lucide-react';
+import { useState } from 'react';
 import type { AppCtx } from './ctx.js';
 
 export function PortailTab({ ctx }: { ctx: AppCtx }) {
   const { activeSourcesInPerimeter, alerts, exportCountries, getSeverityBadge, monitoredSectors, portalSubTab, setMonitoredSectors, setPortalSubTab, setActiveTab, showToast, sources, toggleSourceInPerimeter } = ctx;
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [userName, setUserName] = useState('');
+
+  const handleLogin = async () => {
+    setLoginLoading(true);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword })
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        localStorage.setItem('fsw_token', data.token);
+        localStorage.setItem('fsw_user', JSON.stringify(data.user));
+        setIsLoggedIn(true);
+        setUserName(data.user.name);
+        setShowLogin(false);
+        showToast(`Bienvenue ${data.user.name} !`);
+      } else {
+        showToast(data.error || 'Erreur de connexion');
+      }
+    } catch {
+      showToast('Erreur de connexion au serveur');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('fsw_token');
+    localStorage.removeItem('fsw_user');
+    setIsLoggedIn(false);
+    setUserName('');
+    showToast('Déconnexion réussie');
+  };
+
+  const handleDownloadBulletin = async () => {
+    const token = localStorage.getItem('fsw_token');
+    if (!token) {
+      setShowLogin(true);
+      return;
+    }
+    try {
+      const res = await fetch('/api/bulletin', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `bulletin-${new Date().toISOString().split('T')[0]}.html`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Bulletin téléchargé !');
+      } else {
+        showToast('Erreur lors de la génération du bulletin');
+      }
+    } catch {
+      showToast('Erreur de connexion');
+    }
+  };
+
+  if (showLogin) {
+    return (
+      <div className="py-8 max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="max-w-md mx-auto bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+          <h2 className="text-2xl font-heading font-extrabold text-slate-900 mb-2">Connexion</h2>
+          <p className="text-sm text-slate-500 mb-6">Accédez à votre espace de veille personnalisé.</p>
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-slate-600 block mb-1">Email professionnel</label>
+              <input
+                type="email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                placeholder="jean.dupont@entreprise.com"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:border-[#EA580C]"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-600 block mb-1">Mot de passe</label>
+              <input
+                type="password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:border-[#EA580C]"
+              />
+            </div>
+            <button
+              onClick={handleLogin}
+              disabled={loginLoading}
+              className="w-full py-3 bg-[#EA580C] hover:bg-[#c2410c] text-white font-bold text-sm rounded-xl transition-all disabled:opacity-50"
+            >
+              {loginLoading ? 'Connexion...' : 'Se connecter'}
+            </button>
+            <button
+              onClick={() => setShowLogin(false)}
+              className="w-full py-3 text-slate-500 text-sm hover:text-slate-700"
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="py-8 max-w-7xl mx-auto px-4 sm:px-6">
 
@@ -14,14 +129,13 @@ export function PortailTab({ ctx }: { ctx: AppCtx }) {
           <div className="bg-[#111827] border border-slate-800 rounded-2xl p-4">
             <div className="flex items-center gap-3 pb-3 mb-3 border-b border-slate-800">
               <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold text-white text-sm">
-                VT
+                {isLoggedIn ? userName.charAt(0).toUpperCase() : 'VT'}
               </div>
               <div>
-                <div className="font-heading font-bold text-sm text-white">Visi.Tune</div>
-                <div className="text-[10px] font-mono-code text-[#EA580C]">Plan Discovery (Essai 84j)</div>
+                <div className="font-heading font-bold text-sm text-white">{isLoggedIn ? userName : 'Visi.Tune'}</div>
+                <div className="text-[10px] font-mono-code text-[#EA580C]">{isLoggedIn ? 'Connecté' : 'Plan Discovery (Essai 84j)'}</div>
               </div>
             </div>
-
             <nav className="space-y-1 text-xs">
               {[
                 { id: 'dashboard', label: 'Tableau de bord', icon: LayoutGrid },
@@ -44,6 +158,14 @@ export function PortailTab({ ctx }: { ctx: AppCtx }) {
                 </button>
               ))}
             </nav>
+            {isLoggedIn && (
+              <button
+                onClick={handleLogout}
+                className="w-full mt-3 px-3 py-2 text-xs text-slate-400 hover:text-white text-left"
+              >
+                Déconnexion
+              </button>
+            )}
           </div>
 
           {/* Monitored Summary Box */}
@@ -251,7 +373,7 @@ export function PortailTab({ ctx }: { ctx: AppCtx }) {
                       <p className="text-xs text-slate-400 mt-1">Dossiers clés : {b.highlights}</p>
                     </div>
                     <button 
-                      onClick={() => showToast('Téléchargement du bulletin PDF officiel')}
+                      onClick={handleDownloadBulletin}
                       className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold flex items-center gap-2 border border-slate-700 shrink-0"
                     >
                       <Download className="w-3.5 h-3.5 text-[#EA580C]" />
