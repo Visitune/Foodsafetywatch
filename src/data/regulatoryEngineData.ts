@@ -512,19 +512,6 @@ export const INGESTION_PIPELINES: IngestionPipelineArchitecture[] = [
       'Vérification de l\'état de vigueur : EN VIGUEUR / ABROGÉ / MODIFIÉ',
       'Traçabilité intégrale vers le lien pérenne officiel Légifrance'
     ]
-  },
-  // ─── NOUVEAUTÉS 2026/2027 ───
-  {
-    protocol: 'REST',
-    url: 'https://api.fda.gov/food/enforcement.json',
-    description: 'Alertes rappels FDA en temps réel (openFDA)',
-    format: 'REST JSON'
-  },
-  {
-    protocol: 'SPARQL',
-    url: 'https://publications.europa.eu/webapi/rdf/sparql',
-    description: 'Triplestore Cellar — textes consolidés EUR-Lex',
-    format: 'SPARQL 1.1'
   }
 ];
 
