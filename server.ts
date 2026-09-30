@@ -109,7 +109,6 @@ Renvoie UNIQUEMENT le tableau JSON sans texte avant ni après.`;
         responseMimeType: 'application/json'
       }
     });
-
     const text = result.text || '';
     const cleanedText = text.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(cleanedText);
@@ -121,8 +120,6 @@ Renvoie UNIQUEMENT le tableau JSON sans texte avant ni après.`;
   } catch (error: any) {
     console.error('Error fetching alerts with Gemini, using vetted fallback:', error.message || error);
   }
-
-  // Robust verified fallback alerts
   cachedAlerts = [
     {
       id: 'alert-01',
@@ -283,8 +280,7 @@ async function fetchRASFFNotifications(): Promise<any[]> {
 }
 
 async function fetchEURLEXTexts(): Promise<any[]> {
-  try {
-    const query = `PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
+  const query = `PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
 SELECT ?work ?celex ?title ?date WHERE {
   ?work cdm:resource_legal_type "REG" .
   ?work cdm:work_date_document ?date .
@@ -293,49 +289,60 @@ SELECT ?work ?celex ?title ?date WHERE {
 }
 ORDER BY DESC(?date)
 LIMIT 10`;
-    const url = `https://publications.europa.eu/webapi/rdf/sparql?query=${encodeURIComponent(query)}`;
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(8000),
-      headers: { 'Accept': 'application/sparql-results+json' }
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    const bindings = data.results?.bindings || [];
-    return bindings.map((b: any, i: number) => ({
-      id: `eurlex-${i}`,
-      title: b.title?.value || b.celex?.value || 'Texte EUR-Lex',
-      source: 'EUR-Lex · Cellar',
-      legal_ref: b.celex?.value || '',
-      pays: 'UE',
-      date: b.date?.value || new Date().toISOString().split('T')[0],
-      status: 'EN VIGUEUR',
-      statusBadgeColor: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-      jurisdiction: 'UE',
-      jurisdictionLabel: 'Union Européenne',
-      domainId: 'general',
-      domainName: 'Général',
-      subDomain: 'Général',
-      celexOrNor: b.celex?.value || '',
-      legalReference: b.celex?.value || '',
-      datePublication: b.date?.value || '',
-      dateEntreeVigueur: b.date?.value || '',
-      dateApplication: b.date?.value || '',
-      isApplied: true,
-      articlesImpactSummary: 'Texte réglementaire EUR-Lex',
-      modifiedArticles: [],
-      affectedProducts: [],
-      previousRequirements: '',
-      newRequirements: '',
-      visipilotSoftwareModule: 'VisiPLM',
-      visipilotActionPlan: '',
-      sourceUrl: `https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:${b.celex?.value || ''}`,
-      consolidatedUrl: '',
-      officialSourceBadge: 'EUR-Lex',
-      url: `https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:${b.celex?.value || ''}`
-    }));
-  } catch {
-    return [];
+  const url = `https://publications.europa.eu/webapi/rdf/sparql?query=${encodeURIComponent(query)}`;
+  const proxies = [
+    (u: string) => u,
+    (u: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+    (u: string) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`
+  ];
+  for (const wrap of proxies) {
+    try {
+      const res = await fetch(wrap(url), {
+        signal: AbortSignal.timeout(15000),
+        headers: { 'Accept': 'application/sparql-results+json' }
+      });
+      if (!res.ok) continue;
+      const proxyData = await res.json();
+      const raw = proxyData.contents || proxyData;
+      const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const bindings = data.results?.bindings || [];
+      if (bindings.length > 0) {
+        return bindings.map((b: any, i: number) => ({
+          id: `eurlex-${i}`,
+          title: b.title?.value || b.celex?.value || 'Texte EUR-Lex',
+          source: 'EUR-Lex · Cellar',
+          legal_ref: b.celex?.value || '',
+          pays: 'UE',
+          date: b.date?.value || new Date().toISOString().split('T')[0],
+          status: 'EN VIGUEUR',
+          statusBadgeColor: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+          jurisdiction: 'UE',
+          jurisdictionLabel: 'Union Européenne',
+          domainId: 'general',
+          domainName: 'Général',
+          subDomain: 'Général',
+          celexOrNor: b.celex?.value || '',
+          legalReference: b.celex?.value || '',
+          datePublication: b.date?.value || '',
+          dateEntreeVigueur: b.date?.value || '',
+          dateApplication: b.date?.value || '',
+          isApplied: true,
+          articlesImpactSummary: 'Texte réglementaire EUR-Lex',
+          modifiedArticles: [],
+          affectedProducts: [],
+          previousRequirements: '',
+          newRequirements: '',
+          visipilotSoftwareModule: 'VisiPLM',
+          visipilotActionPlan: '',
+          sourceUrl: `https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:${b.celex?.value || ''}`,
+          consolidatedUrl: '',
+          officialSourceBadge: 'EUR-Lex',
+          url: `https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:${b.celex?.value || ''}`
+        }));
+      }
+    } catch { continue; }
   }
+  return [];
 }
 
 // ─── Légifrance / PISTE Connector (Sandbox) ───
