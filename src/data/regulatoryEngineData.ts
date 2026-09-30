@@ -58,9 +58,9 @@ export interface OfficialRegulatoryText {
   title: string;
   legalReference: string;
   celexOrNor: string;
-  jurisdiction: 'UE' | 'FR';
+  jurisdiction: 'UE' | 'FR' | 'UK' | 'US';
   jurisdictionLabel: string;
-  officialSource: 'EUR-Lex / Cellar' | 'Légifrance / PISTE';
+  officialSource: 'EUR-Lex / Cellar' | 'Légifrance / PISTE' | 'UK DEFRA' | 'US Federal Register · FDA';
   officialSourceBadge: string;
   sourceUrl: string;
   consolidatedUrl?: string;
